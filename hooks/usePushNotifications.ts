@@ -13,8 +13,8 @@ export const usePushNotifications = (): PushNotificationState => {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,
-      shouldSetBadge: false,
-      shouldPlaySound: false,
+      shouldSetBadge: true,
+      shouldPlaySound: true,
     }),
   });
 

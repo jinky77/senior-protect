@@ -6,7 +6,7 @@ import { PaperProvider } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
 import RecordingItem from "@/components/RecordingItem";
 
-const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.33:3001";
+const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.174:3001/api/v1";
 
 export default function Recordings() {
   const [recordings, setRecordings] = useState(null);
@@ -19,10 +19,12 @@ export default function Recordings() {
   });
 
   const fetchRecordings = async () => {
+    console.log(`${PUBLIC_API_URL}/recordings`);
+
     try {
       //@ts-ignore
       setLoading(true);
-      const res = await axios.get(PUBLIC_API_URL);
+      const res = await axios.get(`${PUBLIC_API_URL}/recordings`);
       setRecordings(res.data);
     } catch (err) {
       console.error(err);

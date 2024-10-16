@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { View, Dimensions, Text, ActivityIndicator, StyleSheet, Image } from "react-native";
 import { WebView } from "react-native-webview";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [videoContainerHeight, setVideoContainerHeight] = useState(512);
 
-  const videoContainerHeight = 512;
+  const { expoPushToken } = usePushNotifications();
+  console.log("ExpoPushToken \n");
+  console.log(expoPushToken);
 
   return (
     <>
