@@ -1,34 +1,21 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Pressable, View, Text, StyleSheet, ActivityIndicator } from "react-native";
-import { CartesianChart, Bar, useChartPressState } from "victory-native";
-import { Text as SKText, useFont } from "@shopify/react-native-skia";
-import { useDerivedValue } from "react-native-reanimated";
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { BarChart } from "react-native-gifted-charts";
 import axios from "axios";
 
-//@ts-ignore
-import roboto from "../../assets/fonts/Roboto-Regular.ttf";
-
 export default function Analytics() {
-  const font = useFont(roboto, 12);
-  const tooltipFont = useFont(roboto, 16);
-  const [allData, setAllData] = useState(null);
-  const [timeframe, setTimeframe] = useState("day");
+  const [allData, setAllData] = useState();
   const [isLoading, setIsLoading] = useState(true);
+  const [timeframe, setTimeframe] = useState("day");
+  const [options, setOptions] = useState([
+    { key: "day", value: "Jour", endSpacing: 50 },
+    { key: "week", value: "Semaine", endSpacing: 5 },
+    { key: "month", value: "Mois", endSpacing: 10 },
+    { key: "year", value: "Année", endSpacing: 10 },
+  ]);
 
-  const [customDomainPadding, setCustomDomainPadding] = useState(40);
-  const [roundedCorners, setRoundedCorners] = useState(3);
-  const [tooltipHeight, setTooltipHeight] = useState(40);
-  const [tooltipWidth, setTooltipWidth] = useState(100);
-
-  const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.21:3001/api/v1";
-
-  const options = [
-    { key: "day", value: "Jour" },
-    { key: "week", value: "Semaine" },
-    { key: "month", value: "Mois" },
-    { key: "year", value: "Année" },
-  ];
+  const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.174:3001/api/v1";
 
   const fetchAllData = useCallback(async () => {
     setIsLoading(true);
@@ -37,38 +24,25 @@ export default function Analytics() {
       setAllData(response.data);
     } catch (error) {
       console.error("Error fetching data:", error);
-      // Implement error handling UI here
     } finally {
       setIsLoading(false);
     }
-  }, [PUBLIC_API_URL]);
+  }, []);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
 
-  const { state, isActive } = useChartPressState({
-    x: 0,
-    y: { events: 0 },
-  });
-
-  const value = useDerivedValue(() => "" + state.y.events.value.value, [state]);
-
-  const textYPosition = useDerivedValue(() => state.y.events.position.value - 15, [value]);
-
-  const textXPosition = useDerivedValue(() => {
-    if (!tooltipFont) return 0;
-    return state.x.position.value - tooltipFont.measureText(value.value).width / 2;
-  }, [value, tooltipFont]);
-
   const currentData = useMemo(() => allData?.[timeframe] || [], [allData, timeframe]);
 
-  const maxDomain = useMemo(() => {
+  const maxValue = useMemo(() => {
     //@ts-ignore
-    const maxValue = Math.max(...currentData.map((d) => d.events));
-    if (maxValue === 0) return 1;
-    return Math.ceil(maxValue * 1.1); // Add 10% to maxValue to make sur tooltip is displayed
+    const _maxValue = Math.max(...currentData.map((d) => d.value));
+    if (_maxValue === 0) return 1;
+    return _maxValue * 1.25; // Adjust depending on height prop
   }, [currentData]);
+
+  const currentOption = useMemo(() => options.find((option) => option.key === timeframe) || options[0], [timeframe, options]);
 
   return (
     <>
@@ -78,77 +52,70 @@ export default function Analytics() {
           <Ionicons name="refresh" size={25} color="black" />
         </Pressable>
       </View>
-      {isLoading ? (
-        <View style={styles.spinnerContainer}>
-          <ActivityIndicator size="large" color="#4e2a84" />
-        </View>
-      ) : (
-        <>
-          <View style={styles.segmentedButtonsContainer}>
-            {options.map((option, index) => (
-              <Pressable
-                key={option.key}
-                style={[
-                  styles.segmentedButtonsOption,
-                  index === 0 && styles.segmentedButtonsOptionFirst,
-                  index === options.length - 1 && styles.segmentedButtonsOptionLast,
-                  index !== options.length - 1 && styles.segmentedButtonsOptionMiddle,
-                  option.key === timeframe && styles.segmentedButtonsOptionActive,
-                ]}
-                onPress={() => setTimeframe(option.key)}
-              >
-                <Text style={styles.segmentedButtonsOptionText}>{option.value}</Text>
-              </Pressable>
-            ))}
+      <View style={styles.container}>
+        {isLoading ? (
+          <View style={styles.spinnerContainer}>
+            <ActivityIndicator size="large" color="#4e2a84" />
           </View>
-          <View style={styles.chart}>
-            {!isLoading && allData && (
-              <CartesianChart
-                data={currentData}
-                //@ts-ignore
-                chartPressState={state}
-                xKey="period"
-                yKeys={["events"]}
-                padding={10}
-                domainPadding={{ left: customDomainPadding, right: customDomainPadding }}
-                domain={{ y: [0, maxDomain] }}
-                // Prop axisOptions is deprecated, will need update
-                // See https://commerce.nearform.com/open-source/victory-native/docs/cartesian/cartesian-chart#axisoptions-deprecated
-                axisOptions={{
-                  font,
-                  lineColor: {
-                    grid: { x: "#F2F2F2", y: "#A6A6A6" },
-                    frame: "#F2F2F2",
-                  },
-                  lineWidth: {
-                    grid: { x: 0, y: 0.5 },
-                    frame: 0,
-                  },
-                  tickCount: { x: currentData.length, y: maxDomain < 4 ? 1 : 4 },
-                  labelOffset: { x: 10, y: 10 },
-                }}
-              >
-                {({ points, chartBounds }) => (
-                  <>
-                    <Bar
-                      points={points.events}
-                      chartBounds={chartBounds}
-                      animate={{ type: "timing", duration: 300 }}
-                      barCount={currentData.length}
-                      color="#4e2a84"
-                      roundedCorners={{
-                        topLeft: roundedCorners,
-                        topRight: roundedCorners,
-                      }}
-                    />
-                    {isActive && tooltipFont && <SKText font={tooltipFont} color="black" x={textXPosition} y={textYPosition} text={value} />}
-                  </>
-                )}
-              </CartesianChart>
-            )}
-          </View>
-        </>
-      )}
+        ) : (
+          <>
+            <View style={styles.segmentedButtonsContainer}>
+              {options.map((option, index) => (
+                <Pressable
+                  key={option.key}
+                  style={[
+                    styles.segmentedButtonsOption,
+                    index === 0 && styles.segmentedButtonsOptionFirst,
+                    index === options.length - 1 && styles.segmentedButtonsOptionLast,
+                    index !== options.length - 1 && styles.segmentedButtonsOptionMiddle,
+                    option.key === timeframe && styles.segmentedButtonsOptionActive,
+                  ]}
+                  onPress={() => setTimeframe(option.key)}
+                >
+                  <Text style={styles.segmentedButtonsOptionText}>{option.value}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <BarChart
+              height={550}
+              adjustToWidth
+              data={currentData}
+              frontColor="#4E2A84"
+              disableScroll
+              activeOpacity={1}
+              noOfSections={maxValue < 5 ? 1 : 5} // Check if relevant
+              maxValue={maxValue}
+              endSpacing={currentOption.endSpacing}
+              //@ts-ignore
+              renderTooltip={(item, index) => {
+                const isRightSide = index >= currentData.length / 2;
+                return (
+                  <View
+                    style={{
+                      flex: 1,
+                      backgroundColor: "white",
+                      borderWidth: 1.25,
+                      borderColor: item.frontColor,
+                      justifyContent: "center",
+                      borderRadius: 7,
+                      width: 175,
+                      left: isRightSide ? -125 : -15,
+                      bottom: -35,
+                      padding: 15,
+                    }}
+                  >
+                    <View style={{ display: "flex", flexDirection: "column" }}>
+                      <Text style={{ color: item.frontColor, fontWeight: 500 }}>{item.formattedLabel}</Text>
+                      <Text style={{ color: item.frontColor, fontSize: 18, marginTop: 7, fontWeight: 500 }}>{item.value}</Text>
+                      <Text style={{ color: item.frontColor, marginTop: 2, fontSize: 12 }}>{item.value > 1 ? "Evénements" : "Evénement"}</Text>
+                    </View>
+                  </View>
+                );
+              }}
+            />
+          </>
+        )}
+      </View>
     </>
   );
 }
@@ -156,7 +123,6 @@ export default function Analytics() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "white",
   },
   headerContainer: {
     backgroundColor: "#FFF",
@@ -193,9 +159,6 @@ const styles = StyleSheet.create({
   },
   segmentedButtonsOptionText: {
     fontWeight: "bold",
-  },
-  chart: {
-    flex: 1,
   },
   segmentedButtonsOptionFirst: {
     borderTopLeftRadius: 25,

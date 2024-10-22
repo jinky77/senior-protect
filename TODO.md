@@ -20,8 +20,8 @@
 - [x] Implement `victory-native` analytics w/ Firebase Realtime Database
 - [x] Fix UI for `month` and year `timeframes`
 - [x] Add spinner when data is being fetched
-- [ ] Add specific styling to the bar that includes today's date like [Bar Charts Custom Bard example](https://github.com/FormidableLabs/victory-native-xl/blob/main/example/app/bar-charts-custom-bars.tsx)
-- [ ] Add custom tooltip
+- [x] Add custom tooltip
+- [x] Add specific styling to the bar that includes today's date like [Bar Charts Custom Bard example](https://github.com/FormidableLabs/victory-native-xl/blob/main/example/app/bar-charts-custom-bars.tsx)
 
 ## Notifications
 

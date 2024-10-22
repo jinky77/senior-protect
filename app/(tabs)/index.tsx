@@ -3,7 +3,7 @@ import { View, Dimensions, Text, ActivityIndicator, StyleSheet, Image } from "re
 import { WebView } from "react-native-webview";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
-const App = () => {
+export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [videoContainerHeight, setVideoContainerHeight] = useState(512);
@@ -42,7 +42,7 @@ const App = () => {
       </View>
     </>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -75,5 +75,3 @@ const styles = StyleSheet.create({
     top: "50%",
   },
 });
-
-export default App;
