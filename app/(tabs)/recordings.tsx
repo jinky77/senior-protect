@@ -1,19 +1,28 @@
 //@ts-nocheck
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ActivityIndicator, View, Text, Pressable, SectionList, StyleSheet, Alert, Animated, Easing } from "react-native";
-import axios from "axios";
+import { useRef, useCallback, useState } from "react";
+import { View, Text, Pressable, Alert, StyleSheet, ActivityIndicator, SectionList } from "react-native";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { PaperProvider } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
 import RecordingItem from "@/components/RecordingItem";
+import { useDataFetching } from "@/hooks/useDataFetching";
+import { RefreshButton } from "@/components/RefreshButton";
+import axios from "axios";
 
 const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.120.8.178:3001/api/v1";
 
 export default function Recordings() {
-  const [recordings, setRecordings] = useState(null);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isManualRefresh, setIsManualRefresh] = useState(false);
+  const {
+    data: recordings,
+    setData: setRecordings,
+    isInitialLoading,
+    isRefreshing,
+    isManualRefresh,
+    handleManualRefresh,
+    fetchData,
+    spin,
+  } = useDataFetching(`${PUBLIC_API_URL}/recordings`);
+
   const [selectedVideo, setSelectedVideo] = useState(null);
 
   const ref = useRef(null);
@@ -22,82 +31,14 @@ export default function Recordings() {
     player.play();
   });
 
-  // Create animated value for rotation
-  const rotateAnim = useMemo(() => new Animated.Value(0), []);
-
-  // Animation setup
-  const startRotation = useCallback(() => {
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [rotateAnim]);
-
-  const stopRotation = useCallback(() => {
-    rotateAnim.stopAnimation();
-    rotateAnim.setValue(0);
-  }, [rotateAnim]);
-
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
-
-  const fetchRecordings = useCallback(
-    async (isInitial = false, isManual = false) => {
-      if (isInitial) {
-        setIsInitialLoading(true);
-      } else {
-        setIsRefreshing(true);
-        if (isManual) {
-          setIsManualRefresh(true);
-          startRotation();
-        }
-      }
-
-      try {
-        const res = await axios.get(`${PUBLIC_API_URL}/recordings`);
-        setRecordings(res.data);
-      } catch (err) {
-        console.error(err);
-        if (!isInitial) {
-          Alert.alert("Erreur", "Impossible de mettre à jour les enregistrements. Veuillez réessayer.");
-        }
-      } finally {
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
-        if (isManual) {
-          setIsManualRefresh(false);
-          stopRotation();
-        }
-      }
-    },
-    [startRotation, stopRotation]
-  );
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchRecordings(true);
-  }, [fetchRecordings]);
-
-  // Setup periodic refresh
-  useEffect(() => {
-    const updateRecordings = setInterval(() => {
-      fetchRecordings(false, false);
-    }, 5000);
-
-    return () => clearInterval(updateRecordings);
-  }, [fetchRecordings]);
-
   const deleteVideo = async (item) => {
     try {
-      const res = await axios.delete(`${PUBLIC_API_URL}/delete/${item.directory}/${item.name}`);
+      const res = await axios.delete(`${PUBLIC_API_URL}/recordings/delete/${item.directory}/${item.name}`);
       if (res.status === 200) {
+        // Immediately update the UI
         setRecordings((prevRecordings) => {
+          if (!prevRecordings) return [];
+
           const updatedRecordings = prevRecordings
             .map((section) => ({
               ...section,
@@ -106,6 +47,9 @@ export default function Recordings() {
             .filter((section) => section.data.length > 0);
           return updatedRecordings;
         });
+
+        // Fetch fresh data from the server to ensure consistency
+        await fetchData(false, false);
       }
     } catch (err) {
       console.error("Erreur : ", err);
@@ -113,33 +57,17 @@ export default function Recordings() {
     }
   };
 
-  const handleManualRefresh = () => {
-    fetchRecordings(false, true);
-  };
-
   const renderItem = useCallback(
     ({ item }) => <RecordingItem item={item} setSelectedVideo={setSelectedVideo} deleteVideo={deleteVideo} />,
     [setSelectedVideo]
   );
 
-  const RefreshIcon = () => (
-    <Animated.View style={isManualRefresh ? { transform: [{ rotate: spin }] } : undefined}>
-      <Ionicons name={isManualRefresh ? "sync" : "refresh"} size={25} color={isManualRefresh ? "gray" : "black"} />
-    </Animated.View>
-  );
-
+  // Rest of the component remains the same...
   return (
     <PaperProvider>
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Enregistrements</Text>
-        <Pressable
-          onPress={handleManualRefresh}
-          android_ripple={{ color: "#E1E0EB", radius: 20 }}
-          style={styles.refreshButton}
-          disabled={isRefreshing || isManualRefresh}
-        >
-          <RefreshIcon />
-        </Pressable>
+        <RefreshButton onPress={handleManualRefresh} isRefreshing={isRefreshing} isManualRefresh={isManualRefresh} spin={spin} />
       </View>
       <View style={styles.container}>
         {isInitialLoading ? (
@@ -198,9 +126,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "500",
-  },
-  refreshButton: {
-    padding: 10,
   },
   spinnerContainer: {
     flex: 1,

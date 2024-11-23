@@ -1,9 +1,9 @@
 //@ts-nocheck
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Animated, Easing } from 'react-native';
-import axios from 'axios';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Animated, Easing } from "react-native";
+import axios from "axios";
 
-export const useDataFetching = (url, refreshInterval = 5000) => {
+export const useDataFetching = (url, refreshInterval = 10000) => {
   const [data, setData] = useState(null);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -31,7 +31,7 @@ export const useDataFetching = (url, refreshInterval = 5000) => {
 
   const spin = rotateAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: ["0deg", "360deg"],
   });
 
   const fetchData = useCallback(
@@ -50,7 +50,7 @@ export const useDataFetching = (url, refreshInterval = 5000) => {
         const response = await axios.get(url);
         setData(response.data);
       } catch (error) {
-        console.error('Error fetching data:', error);
+        console.error("Error fetching data:", error);
         throw error;
       } finally {
         setIsInitialLoading(false);
@@ -89,6 +89,7 @@ export const useDataFetching = (url, refreshInterval = 5000) => {
     isRefreshing,
     isManualRefresh,
     handleManualRefresh,
+    fetchData,
     spin,
   };
 };

@@ -1,15 +1,13 @@
 //@ts-nocheck
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { View, Text, Pressable, ActivityIndicator, StyleSheet, Animated, Easing } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { useState, useMemo } from "react";
+import { View, Text, Pressable, ActivityIndicator, StyleSheet } from "react-native";
 import { BarChart } from "react-native-gifted-charts";
-import axios from "axios";
+import { useDataFetching } from "@/hooks/useDataFetching";
+import { RefreshButton } from "@/components/RefreshButton";
+
+const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.120.8.178:3001/api/v1";
 
 export default function Analytics() {
-  const [allData, setAllData] = useState();
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isManualRefresh, setIsManualRefresh] = useState(false);
   const [timeframe, setTimeframe] = useState("day");
   const [options] = useState([
     { key: "day", value: "Jour", endSpacing: 50 },
@@ -18,75 +16,14 @@ export default function Analytics() {
     { key: "year", value: "Année", endSpacing: 10 },
   ]);
 
-  // Create animated value for rotation
-  const rotateAnim = useMemo(() => new Animated.Value(0), []);
-
-  const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.120.8.178:3001/api/v1";
-
-  // Animation setup
-  const startRotation = useCallback(() => {
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, [rotateAnim]);
-
-  const stopRotation = useCallback(() => {
-    rotateAnim.stopAnimation();
-    rotateAnim.setValue(0);
-  }, [rotateAnim]);
-
-  const spin = rotateAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
-
-  const fetchAllData = useCallback(
-    async (isInitial = false, isManual = false) => {
-      if (isInitial) {
-        setIsInitialLoading(true);
-      } else {
-        setIsRefreshing(true);
-        if (isManual) {
-          setIsManualRefresh(true);
-          startRotation();
-        }
-      }
-
-      try {
-        const response = await axios.get(`${PUBLIC_API_URL}/users/getAllAnalytics`);
-        setAllData(response.data);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      } finally {
-        setIsInitialLoading(false);
-        setIsRefreshing(false);
-        if (isManual) {
-          setIsManualRefresh(false);
-          stopRotation();
-        }
-      }
-    },
-    [startRotation, stopRotation]
-  );
-
-  // Initial data fetch
-  useEffect(() => {
-    fetchAllData(true);
-  }, []);
-
-  // Setup periodic refresh
-  useEffect(() => {
-    const updateChartData = setInterval(() => {
-      fetchAllData(false, false);
-    }, 5000);
-
-    return () => clearInterval(updateChartData);
-  }, [fetchAllData]);
+  const {
+    data: allData,
+    isInitialLoading,
+    isRefreshing,
+    isManualRefresh,
+    handleManualRefresh,
+    spin,
+  } = useDataFetching(`${PUBLIC_API_URL}/users/getAllAnalytics`);
 
   const currentData = useMemo(() => allData?.[timeframe] || [], [allData, timeframe]);
 
@@ -98,28 +35,11 @@ export default function Analytics() {
 
   const currentOption = useMemo(() => options.find((option) => option.key === timeframe) || options[0], [timeframe, options]);
 
-  const handleManualRefresh = () => {
-    fetchAllData(false, true);
-  };
-
-  const RefreshIcon = () => (
-    <Animated.View style={isManualRefresh ? { transform: [{ rotate: spin }] } : undefined}>
-      <Ionicons name={isManualRefresh ? "sync" : "refresh"} size={25} color={isManualRefresh ? "gray" : "black"} />
-    </Animated.View>
-  );
-
   return (
     <>
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Analytique</Text>
-        <Pressable
-          onPress={handleManualRefresh}
-          android_ripple={{ color: "#E1E0EB", radius: 20 }}
-          style={styles.refreshButton}
-          disabled={isRefreshing || isManualRefresh}
-        >
-          <RefreshIcon />
-        </Pressable>
+        <RefreshButton onPress={handleManualRefresh} isRefreshing={isRefreshing} isManualRefresh={isManualRefresh} spin={spin} />
       </View>
       <View style={styles.container}>
         {isInitialLoading ? (
@@ -205,9 +125,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "500",
-  },
-  refreshButton: {
-    padding: 10,
   },
   spinnerContainer: {
     flex: 1,
