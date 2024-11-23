@@ -29,7 +29,8 @@ export default function App() {
               isLoading && styles.hideWebViewContainer,
               { flex: 0, height: videoContainerHeight, marginTop: (Dimensions.get("screen").height - videoContainerHeight) / 5.5 },
             ]}
-            source={{ uri: process.env.EXPO_PUBLIC_STREAM_URL || "http://192.168.1.33:8765/picture/1/frame/" }}
+            source={{ uri: process.env.EXPO_PUBLIC_STREAM_URL || "https://www.youtube.com/watch?v=R7vrbiDi0Tc" }}
+            
             onError={() => setError(true)}
             onLoad={() => setIsLoading(false)}
           />

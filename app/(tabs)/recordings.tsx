@@ -1,58 +1,108 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { ActivityIndicator, View, Text, Pressable, SectionList, StyleSheet, Alert } from "react-native";
+//@ts-nocheck
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { ActivityIndicator, View, Text, Pressable, SectionList, StyleSheet, Alert, Animated, Easing } from "react-native";
 import axios from "axios";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { PaperProvider } from "react-native-paper";
 import { Ionicons } from "@expo/vector-icons";
 import RecordingItem from "@/components/RecordingItem";
 
-const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://192.168.1.174:3001/api/v1";
+const PUBLIC_API_URL = process.env.EXPO_PUBLIC_API_URL || "http://10.120.8.178:3001/api/v1";
 
 export default function Recordings() {
   const [recordings, setRecordings] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isManualRefresh, setIsManualRefresh] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState(null);
 
   const ref = useRef(null);
   const player = useVideoPlayer(selectedVideo, (player) => {
+    player.loop = true;
     player.play();
   });
 
-  const fetchRecordings = async () => {
-    console.log(`${PUBLIC_API_URL}/recordings`);
+  // Create animated value for rotation
+  const rotateAnim = useMemo(() => new Animated.Value(0), []);
 
-    try {
-      //@ts-ignore
-      setLoading(true);
-      const res = await axios.get(`${PUBLIC_API_URL}/recordings`);
-      setRecordings(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      //@ts-ignore
-      setLoading(false);
-    }
-  };
+  // Animation setup
+  const startRotation = useCallback(() => {
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, [rotateAnim]);
 
+  const stopRotation = useCallback(() => {
+    rotateAnim.stopAnimation();
+    rotateAnim.setValue(0);
+  }, [rotateAnim]);
+
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  const fetchRecordings = useCallback(
+    async (isInitial = false, isManual = false) => {
+      if (isInitial) {
+        setIsInitialLoading(true);
+      } else {
+        setIsRefreshing(true);
+        if (isManual) {
+          setIsManualRefresh(true);
+          startRotation();
+        }
+      }
+
+      try {
+        const res = await axios.get(`${PUBLIC_API_URL}/recordings`);
+        setRecordings(res.data);
+      } catch (err) {
+        console.error(err);
+        if (!isInitial) {
+          Alert.alert("Erreur", "Impossible de mettre à jour les enregistrements. Veuillez réessayer.");
+        }
+      } finally {
+        setIsInitialLoading(false);
+        setIsRefreshing(false);
+        if (isManual) {
+          setIsManualRefresh(false);
+          stopRotation();
+        }
+      }
+    },
+    [startRotation, stopRotation]
+  );
+
+  // Initial data fetch
   useEffect(() => {
-    fetchRecordings();
-  }, []);
+    fetchRecordings(true);
+  }, [fetchRecordings]);
 
-  //@ts-ignore
+  // Setup periodic refresh
+  useEffect(() => {
+    const updateRecordings = setInterval(() => {
+      fetchRecordings(false, false);
+    }, 5000);
+
+    return () => clearInterval(updateRecordings);
+  }, [fetchRecordings]);
+
   const deleteVideo = async (item) => {
     try {
       const res = await axios.delete(`${PUBLIC_API_URL}/delete/${item.directory}/${item.name}`);
       if (res.status === 200) {
         setRecordings((prevRecordings) => {
-          //@ts-ignore
           const updatedRecordings = prevRecordings
-            //@ts-ignore
             .map((section) => ({
               ...section,
-              //@ts-ignore
               data: section.data.filter((recording) => recording.id !== item.id),
             }))
-            //@ts-ignore
             .filter((section) => section.data.length > 0);
           return updatedRecordings;
         });
@@ -63,34 +113,40 @@ export default function Recordings() {
     }
   };
 
+  const handleManualRefresh = () => {
+    fetchRecordings(false, true);
+  };
+
   const renderItem = useCallback(
-    // @ts-ignore
-    ({ item }) => (
-      <RecordingItem
-        // @ts-ignore
-        item={item}
-        setSelectedVideo={setSelectedVideo}
-        deleteVideo={deleteVideo}
-      />
-    ),
+    ({ item }) => <RecordingItem item={item} setSelectedVideo={setSelectedVideo} deleteVideo={deleteVideo} />,
     [setSelectedVideo]
+  );
+
+  const RefreshIcon = () => (
+    <Animated.View style={isManualRefresh ? { transform: [{ rotate: spin }] } : undefined}>
+      <Ionicons name={isManualRefresh ? "sync" : "refresh"} size={25} color={isManualRefresh ? "gray" : "black"} />
+    </Animated.View>
   );
 
   return (
     <PaperProvider>
       <View style={styles.headerContainer}>
         <Text style={styles.headerTitle}>Enregistrements</Text>
-        <Pressable onPress={() => fetchRecordings()} android_ripple={{ color: "#E1E0EB", radius: 20 }} style={{ padding: 10 }}>
-          <Ionicons name="refresh" size={25} color="black" />
+        <Pressable
+          onPress={handleManualRefresh}
+          android_ripple={{ color: "#E1E0EB", radius: 20 }}
+          style={styles.refreshButton}
+          disabled={isRefreshing || isManualRefresh}
+        >
+          <RefreshIcon />
         </Pressable>
       </View>
       <View style={styles.container}>
-        {loading ? (
+        {isInitialLoading ? (
           <View style={styles.spinnerContainer}>
             <ActivityIndicator size="large" color="#4e2a84" />
           </View>
-        ) : // @ts-ignore
-        recordings && recordings.length > 0 ? (
+        ) : recordings && recordings.length > 0 ? (
           selectedVideo ? (
             <View style={styles.videoContainer}>
               <VideoView ref={ref} style={styles.video} player={player} contentFit="contain" allowsFullscreen allowsPictureInPicture />
@@ -107,15 +163,13 @@ export default function Recordings() {
               </Pressable>
             </View>
           ) : (
-            <>
-              <SectionList
-                sections={recordings}
-                keyExtractor={(item) => item.id.toString()}
-                renderItem={renderItem}
-                renderSectionHeader={({ section: { title } }) => <Text style={styles.sectionListHeader}>{title}</Text>}
-                style={styles.list}
-              />
-            </>
+            <SectionList
+              sections={recordings}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={renderItem}
+              renderSectionHeader={({ section: { title } }) => <Text style={styles.sectionListHeader}>{title}</Text>}
+              style={styles.list}
+            />
           )
         ) : (
           <View style={styles.errorMessage}>
@@ -144,6 +198,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "500",
+  },
+  refreshButton: {
+    padding: 10,
   },
   spinnerContainer: {
     flex: 1,
